@@ -34,11 +34,6 @@ const getEmbedding = async (text) => {
 
 const generateAnswer = async (question, chunks) => {
   const context = chunks.join("\n\n");
-  const systemPrompt = `Human: Use the following document context to answer the question:
-    ${context}
-    Question: ${question}
-    Assistant:
-  `;
 
   const command = new InvokeModelCommand({
     modelId: "us.anthropic.claude-3-7-sonnet-20250219-v1:0",

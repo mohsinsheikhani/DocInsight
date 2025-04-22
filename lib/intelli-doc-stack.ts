@@ -12,6 +12,7 @@ import * as sfn from "aws-cdk-lib/aws-stepfunctions";
 import * as tasks from "aws-cdk-lib/aws-stepfunctions-tasks";
 import * as iam from "aws-cdk-lib/aws-iam";
 import * as path from "path";
+import * as s3n from "aws-cdk-lib/aws-s3-notifications";
 
 export class IntelliDocStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -23,6 +24,65 @@ export class IntelliDocStack extends cdk.Stack {
       autoDeleteObjects: true,
       versioned: true,
     });
+
+    // REST API Gateway
+    const apiResource = new apigateway.RestApi(this, "DocumentUploadApi", {
+      restApiName: "Document Upload Service",
+      binaryMediaTypes: [
+        "application/pdf",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/octet-stream",
+      ],
+    });
+
+    // IAM role for API Gateway to access S3
+    const apiGatewayS3Role = new iam.Role(this, "ApiGatewayS3Role", {
+      assumedBy: new iam.ServicePrincipal("apigateway.amazonaws.com"),
+    });
+
+    bucket.grantPut(apiGatewayS3Role);
+
+    const uploadResource = apiResource.root.addResource("upload");
+
+    uploadResource.addMethod(
+      "POST",
+      new apigateway.AwsIntegration({
+        service: "s3",
+        integrationHttpMethod: "PUT",
+        path: `${bucket.bucketName}/{object}`,
+        options: {
+          credentialsRole: apiGatewayS3Role,
+          requestParameters: {
+            "integration.request.path.object":
+              "method.request.querystring.filename",
+            "integration.request.header.Content-Type":
+              "method.request.header.Content-Type",
+          },
+          passthroughBehavior: apigateway.PassthroughBehavior.WHEN_NO_TEMPLATES,
+          integrationResponses: [
+            {
+              statusCode: "200",
+              responseTemplates: {
+                "application/json": JSON.stringify({
+                  message: "Upload success!",
+                }),
+              },
+            },
+          ],
+        },
+      }),
+      {
+        requestParameters: {
+          "method.request.querystring.filename": true,
+          "method.request.header.Content-Type": true,
+        },
+        methodResponses: [
+          {
+            statusCode: "200",
+          },
+        ],
+      }
+    );
 
     // StartTextractJobLambda
     const startTextractJobLambdaProps: NodejsFunctionProps = {
@@ -205,9 +265,34 @@ export class IntelliDocStack extends cdk.Stack {
       .next(checkStatus)
       .next(isJobComplete);
 
-    new sfn.StateMachine(this, "IntelliDocStateMachine", {
+    const stepFunction = new sfn.StateMachine(this, "IntelliDocStateMachine", {
       definition,
     });
+
+    const startWorkflowLambdaProps: NodejsFunctionProps = {
+      functionName: "StartWorkflowLambda",
+      runtime: lambda.Runtime.NODEJS_20_X,
+      handler: "handler",
+      entry: path.join(__dirname, "../lambda/invoke-sf/index.js"),
+      environment: {
+        STATE_MACHINE_ARN: stepFunction.stateMachineArn,
+      },
+    };
+
+    const startWorkflowLambda = new NodejsFunction(
+      this,
+      "StartWorkflowLambda",
+      {
+        ...startWorkflowLambdaProps,
+      }
+    );
+
+    stepFunction.grantStartExecution(startWorkflowLambda);
+
+    bucket.addEventNotification(
+      s3.EventType.OBJECT_CREATED_PUT,
+      new s3n.LambdaDestination(startWorkflowLambda)
+    );
 
     const domain = new opensearch.Domain(this, "MyOpenSearchDomain", {
       version: opensearch.EngineVersion.OPENSEARCH_2_11,
@@ -290,6 +375,11 @@ export class IntelliDocStack extends cdk.Stack {
       apiKeyRequired: false,
     });
 
+    new cdk.CfnOutput(this, "UploadApiEndpoint", {
+      value: `https://${apiResource.restApiId}.execute-api.${
+        cdk.Stack.of(this).region
+      }.amazonaws.com/${apiResource.deploymentStage.stageName}/upload`,
+    });
     new cdk.CfnOutput(this, "OpenSearchEndpoint", {
       value: domain.domainEndpoint,
     });
