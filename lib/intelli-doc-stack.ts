@@ -7,8 +7,9 @@ import {
   NodejsFunction,
   NodejsFunctionProps,
 } from "aws-cdk-lib/aws-lambda-nodejs";
-import * as s3n from "aws-cdk-lib/aws-s3-notifications";
 import * as opensearch from "aws-cdk-lib/aws-opensearchservice";
+import * as sfn from "aws-cdk-lib/aws-stepfunctions";
+import * as tasks from "aws-cdk-lib/aws-stepfunctions-tasks";
 import * as iam from "aws-cdk-lib/aws-iam";
 import * as path from "path";
 
@@ -23,44 +24,190 @@ export class IntelliDocStack extends cdk.Stack {
       versioned: true,
     });
 
-    const nodeJsFunctionProps: NodejsFunctionProps = {
-      functionName: "DocProcessorLambda",
+    // StartTextractJobLambda
+    const startTextractJobLambdaProps: NodejsFunctionProps = {
+      functionName: "StartTextractJobLambda",
       runtime: lambda.Runtime.NODEJS_20_X,
       handler: "handler",
-      memorySize: 1024,
-      entry: path.join(__dirname, "../lambda/index.js"),
-      timeout: cdk.Duration.seconds(300),
-      environment: {
-        S3_BUCKET_NAME: bucket.bucketName,
-      },
+      entry: path.join(__dirname, "../lambda/start-textract/index.js"),
     };
 
-    const docProcessorLambda = new NodejsFunction(this, "DocProcessorLambda", {
-      ...nodeJsFunctionProps,
-    });
+    const startTextractJobLambda = new NodejsFunction(
+      this,
+      "StartTextractJobLambda",
+      {
+        ...startTextractJobLambdaProps,
+      }
+    );
 
-    docProcessorLambda.addToRolePolicy(
+    startTextractJobLambda.addToRolePolicy(
       new iam.PolicyStatement({
-        actions: ["s3:GetObject", "s3:PutObject"],
+        actions: ["s3:GetObject"],
         resources: [`${bucket.bucketArn}/*`],
       })
     );
 
-    docProcessorLambda.addToRolePolicy(
+    startTextractJobLambda.addToRolePolicy(
       new iam.PolicyStatement({
-        actions: [
-          "textract:StartDocumentTextDetection",
-          "textract:GetDocumentTextDetection",
-          "bedrock:InvokeModel",
-        ],
+        actions: ["textract:StartDocumentTextDetection"],
         resources: ["*"],
       })
     );
 
-    bucket.addEventNotification(
-      s3.EventType.OBJECT_CREATED,
-      new s3n.LambdaDestination(docProcessorLambda)
+    const startTextractJobTask = new tasks.LambdaInvoke(
+      this,
+      "Start Textract Job",
+      {
+        lambdaFunction: startTextractJobLambda,
+        outputPath: "$.Payload",
+      }
     );
+
+    // PollTextractLambda
+    const pollTextractLambdaProps: NodejsFunctionProps = {
+      functionName: "PollTextractLambda",
+      runtime: lambda.Runtime.NODEJS_20_X,
+      handler: "handler",
+      entry: path.join(__dirname, "../lambda/poll-textract/index.js"),
+    };
+
+    const pollTextractLambda = new NodejsFunction(this, "PollTextractLambda", {
+      ...pollTextractLambdaProps,
+    });
+
+    pollTextractLambda.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ["textract:GetDocumentTextDetection"],
+        resources: ["*"],
+      })
+    );
+
+    const checkStatus = new tasks.LambdaInvoke(
+      this,
+      "Check Textract Job Status",
+      {
+        lambdaFunction: pollTextractLambda,
+        resultPath: "$.textractStatus",
+        inputPath: "$",
+      }
+    );
+
+    // ExtractAndChunkText
+    const extractAndChunkLambdaProps: NodejsFunctionProps = {
+      functionName: "ExtractAndChunkText",
+      runtime: lambda.Runtime.NODEJS_20_X,
+      handler: "handler",
+      entry: path.join(__dirname, "../lambda/extract-chunk-text/index.js"),
+    };
+
+    const extractAndChunkLambda = new NodejsFunction(
+      this,
+      "ExtractAndChunkText",
+      {
+        ...extractAndChunkLambdaProps,
+      }
+    );
+
+    extractAndChunkLambda.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ["textract:GetDocumentTextDetection"],
+        resources: ["*"],
+      })
+    );
+
+    const extractAndChunkText = new tasks.LambdaInvoke(
+      this,
+      "Extract and Chunk Text",
+      {
+        lambdaFunction: extractAndChunkLambda,
+        resultPath: "$.chunkedText",
+      }
+    );
+
+    // GenerateEmbeddings
+    const generateEmbeddingsProps: NodejsFunctionProps = {
+      functionName: "GenerateAndStoreEmbeddings",
+      runtime: lambda.Runtime.NODEJS_20_X,
+      timeout: cdk.Duration.seconds(10),
+      handler: "handler",
+      entry: path.join(
+        __dirname,
+        "../lambda/generate-store-embeddings/index.js"
+      ),
+      environment: {
+        OPENSEARCH_ENDPOINT: process.env.OPENSEARCH_ENDPOINT!,
+        OS_USER: process.env.OS_USER!,
+        OS_PASS: process.env.OS_PASS!,
+      },
+    };
+
+    const generateAndStoreEmbeddingsLambda = new NodejsFunction(
+      this,
+      "GenerateAndStoreEmbeddings",
+      {
+        ...generateEmbeddingsProps,
+      }
+    );
+
+    generateAndStoreEmbeddingsLambda.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ["bedrock:InvokeModel"],
+        resources: ["*"],
+      })
+    );
+
+    const generateEmbeddingsMap = new sfn.Map(this, "Generate Embeddings Map", {
+      itemsPath: "$.chunkedText.Payload.chunks",
+      resultPath: "$.embeddings",
+      parameters: {
+        chunk: sfn.JsonPath.stringAt("$$.Map.Item.Value"),
+        documentKey: sfn.JsonPath.stringAt("$.documentKey"),
+        index: sfn.JsonPath.stringAt("$$.Map.Item.Index"),
+      },
+    });
+
+    generateEmbeddingsMap.itemProcessor(
+      new tasks.LambdaInvoke(this, "Generate And Store Embeddings", {
+        lambdaFunction: generateAndStoreEmbeddingsLambda,
+        inputPath: "$",
+        resultPath: "$",
+      })
+    );
+
+    // Step Function Specifics
+    const jobFailed = new sfn.Fail(this, "Textract Failed", {
+      error: "Textract Job Failed",
+      cause: "Textract processing did not succeed",
+    });
+
+    const waitForTextract = new sfn.Wait(this, "Wait for Textract", {
+      time: sfn.WaitTime.duration(cdk.Duration.seconds(10)),
+    });
+
+    const isJobComplete = new sfn.Choice(this, "Is Job Complete?")
+      .when(
+        sfn.Condition.stringEquals(
+          "$.textractStatus.Payload.jobStatus",
+          "SUCCEEDED"
+        ),
+        extractAndChunkText.next(generateEmbeddingsMap)
+      )
+      .when(
+        sfn.Condition.stringEquals(
+          "$.textractStatus.Payload.jobStatus",
+          "FAILED"
+        ),
+        jobFailed
+      )
+      .otherwise(waitForTextract.next(checkStatus));
+
+    const definition = startTextractJobTask
+      .next(checkStatus)
+      .next(isJobComplete);
+
+    new sfn.StateMachine(this, "IntelliDocStateMachine", {
+      definition,
+    });
 
     const domain = new opensearch.Domain(this, "MyOpenSearchDomain", {
       version: opensearch.EngineVersion.OPENSEARCH_2_11,
@@ -94,7 +241,6 @@ export class IntelliDocStack extends cdk.Stack {
 
       zoneAwareness: {
         enabled: false,
-        // availabilityZoneCount: 3,
       },
 
       accessPolicies: [
