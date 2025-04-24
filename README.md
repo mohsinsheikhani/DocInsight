@@ -12,6 +12,23 @@
 
 ---
 
+## Architecture
+
+![MLOps](https://github.com/user-attachments/assets/ebf9e498-62c3-4c6d-b8d1-f0a019ce63d4)
+
+
+| Component                        | Role                                       |
+| -------------------------------- | ------------------------------------------ |
+| **Amazon Textract**              | Extracts structured text from PDFs/images  |
+| **Amazon SageMaker (Cohere v3)** | Generates semantic embeddings              |
+| **Amazon OpenSearch**            | Stores vectors for retrieval-based search  |
+| **Amazon Bedrock (Claude)**      | Generates final natural language answers   |
+| **Step Functions**               | Orchestrates the end-to-end workflow       |
+| **API Gateway + Lambda**         | Enables file upload and question answering |
+| **AWS CDK**                      | Provisions and deploys the infrastructure  |
+
+---
+
 ## Features
 
 - Upload Document: Users upload PDFs/images via API Gateway → S3.
@@ -24,19 +41,7 @@
 - Semantic Search: Converts user questions into embeddings → finds relevant text chunks.
 - LLM Responses: Uses Amazon Bedrock (Claude) to answer questions contextually.
 
----
 
-## Architecture
-
-| Component                        | Role                                       |
-| -------------------------------- | ------------------------------------------ |
-| **Amazon Textract**              | Extracts structured text from PDFs/images  |
-| **Amazon SageMaker (Cohere v3)** | Generates semantic embeddings              |
-| **Amazon OpenSearch**            | Stores vectors for retrieval-based search  |
-| **Amazon Bedrock (Claude)**      | Generates final natural language answers   |
-| **Step Functions**               | Orchestrates the end-to-end workflow       |
-| **API Gateway + Lambda**         | Enables file upload and question answering |
-| **AWS CDK**                      | Provisions and deploys the infrastructure  |
 
 ---
 
