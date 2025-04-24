@@ -69,6 +69,9 @@
 
 ### Sample Response Generation
 
+![image](https://github.com/user-attachments/assets/53d2d333-d00b-488c-82dd-40d210e060cc)
+
+
 ---
 
 ## Getting Started
