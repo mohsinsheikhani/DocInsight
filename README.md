@@ -1,14 +1,91 @@
-# Welcome to your CDK TypeScript project
+# DocInsight
 
-This is a blank project for CDK development with TypeScript.
+### A Production-Grade, Serverless MLOps Pipeline for Inference and Retrieval-Augmented Generation (RAG)
 
-The `cdk.json` file tells the CDK Toolkit how to execute your app.
+---
 
-## Useful commands
+## About the Project
 
-* `npm run build`   compile typescript to js
-* `npm run watch`   watch for changes and compile
-* `npm run test`    perform the jest unit tests
-* `npx cdk deploy`  deploy this stack to your default AWS account/region
-* `npx cdk diff`    compare deployed stack with current state
-* `npx cdk synth`   emits the synthesized CloudFormation template
+**DocInsight** is a fully serverless, MLOps-enabled document intelligence system built on AWS. It automates the lifecycle of unstructured document processing: from extraction and semantic understanding to natural language querying and AI-generated answers.
+
+> This project is a serverless MLOps pipeline for AI-driven document processing, automating text extraction, refinement, and analysis. It leverages AWS Textract, SageMaker, OpenSearch, and Bedrock, orchestrated via Step Functions, and deployed using AWS CDK.
+
+---
+
+## Features
+
+- Upload Document: Users upload PDFs/images via API Gateway → S3.
+- Step Function Workflow:
+  - Starts Textract Job (async)
+  - Waits for completion
+  - Extracts + chunks text
+  - Invokes SageMaker model to generate embeddings
+  - Stores embeddings in Amazon OpenSearch
+- Semantic Search: Converts user questions into embeddings → finds relevant text chunks.
+- LLM Responses: Uses Amazon Bedrock (Claude) to answer questions contextually.
+
+---
+
+## Architecture
+
+| Component                        | Role                                       |
+| -------------------------------- | ------------------------------------------ |
+| **Amazon Textract**              | Extracts structured text from PDFs/images  |
+| **Amazon SageMaker (Cohere v3)** | Generates semantic embeddings              |
+| **Amazon OpenSearch**            | Stores vectors for retrieval-based search  |
+| **Amazon Bedrock (Claude)**      | Generates final natural language answers   |
+| **Step Functions**               | Orchestrates the end-to-end workflow       |
+| **API Gateway + Lambda**         | Enables file upload and question answering |
+| **AWS CDK**                      | Provisions and deploys the infrastructure  |
+
+---
+
+## Use Cases
+
+- Document Q&A for Enterprises
+- Medical/Financial/Legal document processing
+- Context-aware search on historical archives
+- Internal knowledge base automation
+
+---
+
+## Getting Started
+
+##### Prerequisites
+
+- AWS CLI + CDK configured
+- Node.js + Typescript environment
+- Subscription to the embedding model and Claude for response generation
+- Fill up the `.env` file, variables used for OpenSearch Domain
+
+##### Clone the Repository
+
+```bash
+git clone https://github.com/mohsinsheikhani/DocInsight.git
+cd docinsight
+```
+
+##### Setup
+
+```bash
+cd docinsight
+npm install
+cdk deploy
+```
+
+## API Endpoints
+
+| Endpoint  | Method | Description                                                            |
+| --------- | ------ | ---------------------------------------------------------------------- |
+| `/upload` | POST   | Upload a binary PDF/image file via API Gateway to S3                   |
+| `/ask`    | POST   | Accepts a natural language question and returns an AI-generated answer |
+
+## Demo
+
+### Sample Upload
+
+### Sample Response Generation
+
+---
+
+🚀 **Follow me on [LinkedIn](https://www.linkedin.com/in/mohsin-sheikhani/) for more AWS content!**
