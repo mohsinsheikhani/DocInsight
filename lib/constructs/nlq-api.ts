@@ -27,7 +27,9 @@ export class NLQApiResource extends Construct {
       entry: path.join(__dirname, "../../lambda/nlq-processor/index.js"),
       timeout: cdk.Duration.seconds(20),
       environment: {
-        OPENSEARCH_ENDPOINT: props.domainEndpoint,
+        OPENSEARCH_ENDPOINT: `https://${props.domainEndpoint}`,
+        OS_USER: process.env.OS_USER!,
+        OS_PASS: process.env.OS_PASS!,
       },
     };
 

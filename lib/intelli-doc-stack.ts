@@ -12,7 +12,9 @@ export class IntelliDocStack extends cdk.Stack {
 
     const opensearch = new OpenSearchResource(this, "MyOpenSearchDomain");
 
-    new DocumentProcessingResource(this, "DocumentProcessing");
+    new DocumentProcessingResource(this, "DocumentProcessing", {
+      domainEndpoint: opensearch.domainEndpoint,
+    });
 
     new NLQApiResource(this, "NLQApiResource", {
       domainEndpoint: opensearch.domainEndpoint,

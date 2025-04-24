@@ -6,6 +6,14 @@ import { Client } from "@opensearch-project/opensearch";
 
 const bedrock = new BedrockRuntimeClient({ region: "us-east-1" });
 
+const osClient = new Client({
+  node: process.env.OPENSEARCH_ENDPOINT,
+  auth: {
+    username: process.env.OS_USER,
+    password: process.env.OS_PASS,
+  },
+});
+
 export const handler = async (event) => {
   try {
     const body = JSON.parse(event.body);
@@ -41,14 +49,6 @@ export const handler = async (event) => {
     };
   }
 };
-
-const osClient = new Client({
-  node: process.env.OPENSEARCH_ENDPOINT,
-  auth: {
-    username: process.env.OS_USER,
-    password: process.env.OS_PASS,
-  },
-});
 
 const getEmbedding = async (text) => {
   const command = new InvokeModelCommand({

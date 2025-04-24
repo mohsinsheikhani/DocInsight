@@ -13,8 +13,12 @@ import {
   NodejsFunctionProps,
 } from "aws-cdk-lib/aws-lambda-nodejs";
 
+interface Props {
+  domainEndpoint: string;
+}
+
 export class DocumentProcessingResource extends Construct {
-  constructor(scope: Construct, id: string) {
+  constructor(scope: Construct, id: string, props: Props) {
     super(scope, id);
 
     const bucket = new s3.Bucket(this, "DocumentBucket", {
@@ -197,7 +201,7 @@ export class DocumentProcessingResource extends Construct {
         "../../lambda/generate-store-embeddings/index.js"
       ),
       environment: {
-        OPENSEARCH_ENDPOINT: process.env.OPENSEARCH_ENDPOINT!,
+        OPENSEARCH_ENDPOINT: `https://${props.domainEndpoint}`,
         OS_USER: process.env.OS_USER!,
         OS_PASS: process.env.OS_PASS!,
       },

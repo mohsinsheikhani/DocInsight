@@ -4,6 +4,7 @@ import {
 } from "@aws-sdk/client-bedrock-runtime";
 import { fromNodeProviderChain } from "@aws-sdk/credential-providers";
 import { Client } from "@opensearch-project/opensearch";
+import "dotenv/config";
 
 const bedrockClient = new BedrockRuntimeClient({
   region: "us-east-1",
