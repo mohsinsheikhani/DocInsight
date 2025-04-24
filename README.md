@@ -54,6 +54,23 @@
 
 ---
 
+## API Endpoints
+
+| Endpoint  | Method | Description                                                            |
+| --------- | ------ | ---------------------------------------------------------------------- |
+| `/upload` | POST   | Upload a binary PDF/image file via API Gateway to S3                   |
+| `/ask`    | POST   | Accepts a natural language question and returns an AI-generated answer |
+
+## Demo
+
+### Sample Upload
+
+![image](https://github.com/user-attachments/assets/d07ca289-a877-4ac6-9954-815f234cbd63)
+
+### Sample Response Generation
+
+---
+
 ## Getting Started
 
 ##### Prerequisites
@@ -78,21 +95,7 @@ npm install
 cdk deploy
 ```
 
-## API Endpoints
 
-| Endpoint  | Method | Description                                                            |
-| --------- | ------ | ---------------------------------------------------------------------- |
-| `/upload` | POST   | Upload a binary PDF/image file via API Gateway to S3                   |
-| `/ask`    | POST   | Accepts a natural language question and returns an AI-generated answer |
-
-## Demo
-
-### Sample Upload
-
-![image](https://github.com/user-attachments/assets/3b8b465b-0af8-4c80-af86-ac2e4adad98c)
-
-
-### Sample Response Generation
 
 ---
 
