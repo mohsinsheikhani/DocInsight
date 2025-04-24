@@ -89,6 +89,9 @@ cdk deploy
 
 ### Sample Upload
 
+![image](https://github.com/user-attachments/assets/3b8b465b-0af8-4c80-af86-ac2e4adad98c)
+
+
 ### Sample Response Generation
 
 ---
