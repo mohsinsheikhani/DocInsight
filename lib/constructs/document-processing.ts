@@ -1,4 +1,9 @@
 import { Construct } from "constructs";
+import {
+  NodejsFunction,
+  NodejsFunctionProps,
+} from "aws-cdk-lib/aws-lambda-nodejs";
+
 import * as path from "path";
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as apigateway from "aws-cdk-lib/aws-apigateway";
@@ -6,12 +11,10 @@ import * as s3 from "aws-cdk-lib/aws-s3";
 import * as iam from "aws-cdk-lib/aws-iam";
 import * as cdk from "aws-cdk-lib";
 import * as sfn from "aws-cdk-lib/aws-stepfunctions";
-import * as s3n from "aws-cdk-lib/aws-s3-notifications";
 import * as tasks from "aws-cdk-lib/aws-stepfunctions-tasks";
-import {
-  NodejsFunction,
-  NodejsFunctionProps,
-} from "aws-cdk-lib/aws-lambda-nodejs";
+import * as sqs from "aws-cdk-lib/aws-sqs";
+import * as events from "aws-cdk-lib/aws-events";
+import * as targets from "aws-cdk-lib/aws-events-targets";
 
 interface Props {
   domainEndpoint: string;
@@ -26,6 +29,7 @@ export class DocumentProcessingResource extends Construct {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       autoDeleteObjects: true,
       versioned: true,
+      eventBridgeEnabled: true,
     });
 
     // Api Gateway resoruce for /upload endpoint
@@ -275,32 +279,36 @@ export class DocumentProcessingResource extends Construct {
       definition,
     });
 
-    // Lambda to trigger Step Function Workflow
-    const startWorkflowLambdaProps: NodejsFunctionProps = {
-      functionName: "StartWorkflowLambda",
-      runtime: lambda.Runtime.NODEJS_20_X,
-      handler: "handler",
-      entry: path.join(__dirname, "../../lambda/invoke-sf/index.js"),
-      environment: {
-        STATE_MACHINE_ARN: stepFunction.stateMachineArn,
+    stepFunction.grantStartExecution(
+      new iam.ServicePrincipal("events.amazonaws.com")
+    );
+
+    const dlq = new sqs.Queue(this, "EventBridgeDLQ", {
+      queueName: "eventbridge-sf-dlq-intellidoc",
+    });
+
+    dlq.grantSendMessages(new iam.ServicePrincipal("events.amazonaws.com"));
+
+    new events.Rule(this, "S3PutObjectRule", {
+      eventPattern: {
+        source: ["aws.s3"],
+        detailType: ["Object Created"],
+        detail: {
+          bucket: { name: [bucket.bucketName] },
+          object: { key: [{ prefix: "" }] },
+        },
       },
-    };
-
-    const startWorkflowLambda = new NodejsFunction(
-      this,
-      "StartWorkflowLambda",
-      {
-        ...startWorkflowLambdaProps,
-      }
-    );
-
-    stepFunction.grantStartExecution(startWorkflowLambda);
-
-    // Event Notification based on file upload
-    bucket.addEventNotification(
-      s3.EventType.OBJECT_CREATED_PUT,
-      new s3n.LambdaDestination(startWorkflowLambda)
-    );
+      targets: [
+        new targets.SfnStateMachine(stepFunction, {
+          deadLetterQueue: dlq,
+          input: events.RuleTargetInput.fromObject({
+            bucketName: bucket.bucketName,
+            documentKey: events.EventField.fromPath("$.detail.object.key"),
+            eventTime: events.EventField.fromPath("$.time"),
+          }),
+        }),
+      ],
+    });
 
     new cdk.CfnOutput(this, "UploadApiEndpoint", {
       value: `https://${apiResource.restApiId}.execute-api.${
