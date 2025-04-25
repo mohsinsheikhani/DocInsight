@@ -8,15 +8,13 @@
 
 **DocInsight** is a fully serverless, MLOps-enabled document intelligence system built on AWS. It automates the lifecycle of unstructured document processing: from extraction and semantic understanding to natural language querying and AI-generated answers.
 
-> This project is a serverless MLOps pipeline for AI-driven document processing, automating text extraction, refinement, and analysis. It leverages AWS Textract, SageMaker, OpenSearch, and Bedrock, orchestrated via Step Functions, and deployed using AWS CDK.
+> This project implements a serverless MLOps pipeline for AI-driven document processing, automating text extraction, embedding generation, and natural language querying. It leverages AWS Textract, SageMaker, OpenSearch, Bedrock, EventBridge, Step Functions, and deployed using AWS CDK.
 
 ---
 
 ## Architecture
 
 ![MLOps-diagram](https://github.com/user-attachments/assets/0cc2f544-8380-4399-a1a4-991ca819f1e3)
-
-
 
 | Component                        | Role                                       |
 | -------------------------------- | ------------------------------------------ |
@@ -25,6 +23,9 @@
 | **Amazon OpenSearch**            | Stores vectors for retrieval-based search  |
 | **Amazon Bedrock (Claude)**      | Generates final natural language answers   |
 | **Step Functions**               | Orchestrates the end-to-end workflow       |
+| **Amazon EventBridge**           | Triggers Step Function on S3 upload        |
+| **Amazon S3**                    | Stores uploaded documents                  |
+| **Dead Letter Queue**            | Captures failed EventBridge invocations    |
 | **API Gateway + Lambda**         | Enables file upload and question answering |
 | **AWS CDK**                      | Provisions and deploys the infrastructure  |
 
@@ -32,17 +33,20 @@
 
 ## Features
 
-- Upload Document: Users upload PDFs/images via API Gateway → S3.
-- Step Function Workflow:
-  - Starts Textract Job (async)
-  - Waits for completion
-  - Extracts + chunks text
-  - Invokes SageMaker model to generate embeddings
-  - Stores embeddings in Amazon OpenSearch
-- Semantic Search: Converts user questions into embeddings → finds relevant text chunks.
-- LLM Responses: Uses Amazon Bedrock (Claude) to answer questions contextually.
-
-
+- **Upload Document**:
+  - Users upload PDFs/images via API Gateway → S3 → EventBridge automatically triggers Step Function Workflow.
+- **Step Function Workflow**:
+  - Starts an asynchronous Textract Job
+  - Monitors and waits for job completion
+  - Extracts and chunks text
+  - Invokes SageMaker model to generate semantic embeddings
+  - Stores embeddings in Amazon OpenSearch for semantic search
+- **Semantic Search**:
+  - Converts user questions into embeddings → finds the most relevant document chunks.
+- **LLM Response Generation**:
+  - Uses Amazon Bedrock (Claude) to generate context-aware answers based on the retrieved document context.
+- **Fault Tolerance**:
+  - EventBridge failures are routed to a Dead Letter Queue (DLQ) for inspection and retries.
 
 ---
 
@@ -50,7 +54,6 @@
 
 - Document Q&A for Enterprises
 - Medical/Financial/Legal document processing
-- Context-aware search on historical archives
 - Internal knowledge base automation
 
 ---
@@ -71,7 +74,6 @@
 ### Sample Response Generation
 
 ![image](https://github.com/user-attachments/assets/53d2d333-d00b-488c-82dd-40d210e060cc)
-
 
 ---
 
@@ -98,8 +100,6 @@ cd docinsight
 npm install
 cdk deploy
 ```
-
-
 
 ---
 
