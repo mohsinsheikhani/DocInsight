@@ -1,6 +1,6 @@
 # DocInsight
 
-### A Production-Grade, Serverless MLOps Pipeline for Inference and Retrieval-Augmented Generation (RAG)
+### A Serverless MLOps Pipeline for Inference and Retrieval-Augmented Generation (RAG)
 
 ---
 
@@ -14,7 +14,8 @@
 
 ## Architecture
 
-![MLOps](https://github.com/user-attachments/assets/ebf9e498-62c3-4c6d-b8d1-f0a019ce63d4)
+![MLOps-diagram](https://github.com/user-attachments/assets/0cc2f544-8380-4399-a1a4-991ca819f1e3)
+
 
 
 | Component                        | Role                                       |
